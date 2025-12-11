@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Field Journal — Liquid Glitch</title>
+  <style>
+    :root{ --maxw:900px; --muted:#8b8b8b; --bg:#fbfaf6; --accent:#2b2b2b }
+    html,body{height:100%;margin:0;background:var(--bg);font-family:Georgia, 'Times New Roman', serif;color:var(--accent)}
+    .wrap{max-width:var(--maxw);margin:36px auto;padding:28px}
+    header{display:flex;align-items:center;justify-content:space-between;gap:18px}
+    .brand{font-weight:700;font-size:1.25rem}
+    .sub{font-size:.88rem;color:var(--muted)}
+
+    nav.controls{display:flex;gap:8px}
+    button, .btn{appearance:none;border:0;background:#222;color:#fff;padding:8px 12px;border-radius:6px;cursor:pointer;font-family:sans-serif}
+    button.ghost{background:transparent;color:var(--accent);border:1px solid #ddd}
+
+    main{margin-top:22px}
+    .entry-card{background:#fff;padding:26px;border-radius:10px;box-shadow:0 8px 20px rgba(20,20,20,0.04);border-left:6px solid #e6e2d9}
+    .entry-meta{display:flex;align-items:center;justify-content:space-between;gap:12px}
+    .date{font-weight:700;letter-spacing:0.6px}
+    .meta-small{font-size:.9rem;color:var(--muted)}
+
+    .segment{margin-top:16px}
+    .timestamp{display:inline-block;font-family:monospace;background:#f1efe8;padding:6px 10px;border-left:3px solid #bbb;border-radius:6px}
+    .body{margin-top:10px;white-space:pre-wrap}
+
+    .list{margin-top:24px;display:flex;flex-direction:column;gap:10px}
+    .list a{padding:10px 12px;border-radius:8px;background:transparent;text-decoration:none;color:var(--accent);display:flex;justify-content:space-between;align-items:center;border:1px dashed #eee}
+
+    footer{margin-top:26px;display:flex;gap:12px;align-items:center;justify-content:space-between}
+    .newsletter{display:flex;gap:8px;align-items:center}
+    input[type=email]{padding:8px 10px;border-radius:8px;border:1px solid #ddd}
+
+    @media (max-width:600px){.entry-card{padding:18px}.brand{font-size:1rem}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <div class="brand">Field Journal</div>
+        <div class="sub">Liquid Glitch — a running log of experiments, thoughts, and small steps.</div>
+      </div>
+
+      <nav class="controls">
+        <button id="prevBtn" class="ghost">◀ Prev</button>
+        <button id="nextBtn" class="ghost">Next ▶</button>
+        <button id="downloadMd" title="Download this entry as Markdown">Download MD</button>
+      </nav>
+    </header>
+
+    <main>
+      <section id="entryArea" class="entry-card" aria-live="polite"></section>
+
+      <aside class="list" id="archiveList" aria-label="Archive"></aside>
+
+      <footer>
+        <div class="newsletter">
+          <form id="subscribeForm" onsubmit="return false">
+            <input id="email" type="email" placeholder="you@domain.com" />
+            <button id="subscribeBtn" class="btn">Subscribe</button>
+          </form>
+          <div class="meta-small">No backend — copy email to clipboard for manual import.</div>
+        </div>
+
+        <div class="meta-small">Template: single-file HTML — drop in your server or open locally.</div>
+      </footer>
+    </main>
+  </div>
+
+  <script>
+    let entries = [];
+
+    fetch('journal.json')
+      .then(response => response.json())
+      .then(data => {
+        entries = data;
+        buildArchive();
+        renderEntry(0);
+      });
+
+    let index = 0;
+
+    function renderEntry(i){
+      const e = entries[i];
+      const area = document.getElementById('entryArea');
+      area.innerHTML = '';
+
+      const meta = document.createElement('div');
+      meta.className = 'entry-meta';
+      meta.innerHTML = `<div class="date">${e.title}</div><div class="meta-small">${e.segments.length} notes</div>`;
+      area.appendChild(meta);
+
+      e.segments.forEach(seg => {
+        const s = document.createElement('div'); s.className = 'segment';
+        const ts = document.createElement('div'); ts.className = 'timestamp'; ts.textContent = `// ---- ${seg.time} ----`;
+        const bd = document.createElement('div'); bd.className = 'body'; bd.textContent = seg.text;
+        s.appendChild(ts); s.appendChild(bd); area.appendChild(s);
+      });
+
+      document.getElementById('prevBtn').disabled = (i===0);
+      document.getElementById('nextBtn').disabled = (i===entries.length-1);
+
+      document.querySelectorAll('#archiveList a').forEach(a=>a.style.background='transparent');
+      const link = document.querySelector(`#archiveList a[data-idx='${i}']`);
+      if(link) link.style.background = '#f6f5f0';
+    }
+
+    function buildArchive(){
+      const list = document.getElementById('archiveList');
+      list.innerHTML = '';
+      entries.forEach((e, i) => {
+        const a = document.createElement('a');
+        a.href='#'; a.dataset.idx = i;
+        a.addEventListener('click', (ev)=>{ev.preventDefault(); index = Number(a.dataset.idx); renderEntry(index);});
+        a.innerHTML = `<span>${e.title}</span><small class="meta-small">${e.segments.length} notes</small>`;
+        list.appendChild(a);
+      });
+    }
+
+    document.getElementById('prevBtn').addEventListener('click', ()=>{ if(index>0) index--; renderEntry(index); });
+    document.getElementById('nextBtn').addEventListener('click', ()=>{ if(index<entries.length-1) index++; renderEntry(index); });
+
+    document.getElementById('downloadMd').addEventListener('click', ()=>{
+      const e = entries[index];
+      let md = `# ${e.title}
+
+`;
+      e.segments.forEach(s=>{ md += `## ${s.time}
+
+${s.text}
+
+` });
+      const blob = new Blob([md], {type:'text/markdown'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = `${e.id}.md`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    });
+
+    document.getElementById('subscribeBtn').addEventListener('click', ()=>{
+      const email = document.getElementById('email').value.trim();
+      if(!email || !email.includes('@')){ alert('Please enter a valid email address'); return; }
+      navigator.clipboard?.writeText(email).then(()=>{
+        alert('Email copied to clipboard. Paste it into your newsletter provider.');
+      }).catch(()=>{ alert('Could not copy. Email: ' + email); });
+    });
+
+  </script>
+</body>
+</html>
